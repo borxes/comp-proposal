@@ -7,3 +7,6 @@
 [submodule "lib/sablier"]
 	path = lib/sablier
 	url = https://github.com/sablierhq/sablier
+[submodule "lib/compound-protocol"]
+	path = lib/compound-protocol
+	url = https://github.com/compound-finance/compound-protocol

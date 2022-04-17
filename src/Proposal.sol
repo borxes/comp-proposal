@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.10;
 
-import "openzeppelin/token/ERC20/IERC20.sol";
 import {Constants} from "./Constants.sol";
+import "./interfaces/IERC20.sol";
 import "./interfaces/Sablier.sol";
 import "./interfaces/GovernorBravo.sol";
+import "./interfaces/Oracle.sol";
 
 /*
 The annual price is $2,000,000. $1,000,000 is paid in USDC. $1,000,000 is paid in COMP tokens.
@@ -35,6 +36,7 @@ contract Proposal {
     // cannot be declared as constant - solc limitation
     ISablier public sablier = ISablier(Constants.SABLIER);
     IGovernorBravo public governor = IGovernorBravo(Constants.GOVERNOR_BRAVO);
+    PriceOracle oracle = PriceOracle(Constants.COMP_USD_ORACLE);
 
     string public constant description = "A proposal for significantly and continuously";
     // "improving the security of the Compound platform and the dApps built on top of it, by offering" 
@@ -58,6 +60,38 @@ contract Proposal {
         endTime = _endTime;
         recipient = _recipient;
     }
+
+
+    function getProposalData() public view returns (bytes memory) {
+        return abi.encode(data.targets, data.values, data.signatures, data.calldatas, data.description);
+    }
+
+
+    function run() public {
+        buildProposalData();
+        governor.propose(data.targets, data.values, data.signatures, data.calldatas, description);       
+    }
+
+    function getPriceOfCOMPinUSD() public view returns (uint256, uint8) {
+        (, int256 compPrice, uint startedAt, , ) = oracle.latestRoundData();
+        uint freshTime = 3 /* days */ * 24 /* hours */ * 60 /* minutes */ * 60 /* seconds */; // using "days" leads to "Expected primary expression" error
+        require (startedAt > block.timestamp - freshTime, "price is not fresh");
+        require (compPrice > 0, "comp price must be positive");
+
+        return (uint256(compPrice), oracle.decimals());
+    }
+
+    // formally verify me please :-)
+    function convertUSDAmountToCOMP(uint256 usdAmount) public view returns (uint256) {
+        uint8 compDecimals = IERC20(Constants.COMP_TOKEN).decimals();
+        (uint compPrice, uint8 priceDecimals) = getPriceOfCOMPinUSD();
+        
+        uint256 compAmount = usdAmount * 10**priceDecimals * 10**compDecimals / compPrice;
+        return compAmount;
+    }
+
+
+    // Internal functions
 
     function _addApproveCompAction() internal {
         data.targets.push(Constants.COMP_TOKEN);
@@ -93,16 +127,6 @@ contract Proposal {
         _addCreateCompStreamAction();
         _addCreateUsdcStreamAction();
         data.description = description;
-    }
-
-    function getProposalData() public view returns (bytes memory) {
-        return abi.encode(data.targets, data.values, data.signatures, data.calldatas, data.description);
-    }
-
-
-    function run() public {
-        buildProposalData();
-        governor.propose(data.targets, data.values, data.signatures, data.calldatas, description);       
     }
 }
 

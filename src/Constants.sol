@@ -11,4 +11,14 @@ library Constants {
     address internal constant SABLIER = 0xCD18eAa163733Da39c232722cBC4E8940b1D8888;
 
     address internal constant CERTORA = 0x0F11640BF66e2D9352d9c41434A5C6E597c5e4c8;
+
+    // $1M allocation of COMP
+    uint256 internal constant COMP_VALUE = 1000000;
+    uint256 internal constant USDC_VALUE = 1000000;
+
+    uint256 internal constant COMP_DECIMALS = 18;
+    uint256 internal constant USDC_DECIMALS = 6;
+
+    address internal constant COMP_USD_ORACLE = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
+
 }

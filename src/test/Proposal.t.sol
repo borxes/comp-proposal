@@ -4,9 +4,13 @@ pragma solidity 0.8.10;
 import "ds-test/test.sol";
 import "forge-std/stdlib.sol";
 import "forge-std/Vm.sol";
+import "forge-std/console.sol";
 
 import "../Proposal.sol";
 import {Constants} from "../Constants.sol";
+import "../interfaces/Oracle.sol";
+
+uint256 constant ERROR_MARGIN = 10 ** 12;
 
 contract ContractTest is DSTest {
     Proposal proposal;
@@ -81,6 +85,26 @@ contract ContractTest is DSTest {
         _testDescription();
     }
 
+    function testCompToUsdcConversion() public {
+        PriceOracle oracle = PriceOracle(Constants.COMP_USD_ORACLE);
+        uint256 compAmount = proposal.convertUSDAmountToCOMP(Constants.COMP_VALUE);
+        console.log("comp amount:", compAmount);
+        (, int256 compPrice, , , ) = oracle.latestRoundData();
+        uint256 givenCompValue = compAmount * uint256(compPrice);
+        uint256 expectedUsdValue = Constants.COMP_VALUE * 10 ** (Constants.COMP_DECIMALS + oracle.decimals());
+        console.log("given comp value:", givenCompValue);
+        console.log("expected usd:", expectedUsdValue);
+        uint256 margin;
+        if (expectedUsdValue > givenCompValue) {
+            margin = expectedUsdValue - givenCompValue;
+        } else {
+            margin = givenCompValue - expectedUsdValue;
+        }
+
+        assertLt(margin, ERROR_MARGIN);
+    }
+
     // TODO add the whole simulation and price calculation with chainlink oracle
 
 }
+

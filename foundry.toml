@@ -2,5 +2,6 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
+eth-rpc-url="https://eth-mainnet.alchemyapi.io/v2/5MAtcV5iLUCkBJkwkmOmc9XrfUrd2FnC"
 
 # See more config options https://github.com/gakonst/foundry/tree/master/config

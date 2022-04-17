@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.10;
 
-import "ds-test/test.sol";
-import "forge-std/stdlib.sol";
+import "forge-std/Test.sol";
 import "forge-std/Vm.sol";
 import "forge-std/console.sol";
 
@@ -12,7 +11,7 @@ import "../interfaces/Oracle.sol";
 
 uint256 constant ERROR_MARGIN = 10 ** 12;
 
-contract ContractTest is DSTest {
+contract ContractTest is Test {
     Proposal proposal;
 
     address[] targets;
@@ -21,10 +20,8 @@ contract ContractTest is DSTest {
     bytes[]   calldatas;
     string    description;
 
-    Vm public constant vm = Vm(HEVM_ADDRESS);
-
     function setUp() public {
-        proposal = new Proposal(1000,1000, 5000, 20000, Constants.CERTORA);
+        proposal = new Proposal();
     }
 
     function _testTargets() internal {
@@ -55,16 +52,50 @@ contract ContractTest is DSTest {
 
         // action 1
         (target, amount) = abi.decode(calldatas[0], (address, uint256));
-        assertEq(target, Constants.SABLIER);
-        assertEq(amount, proposal.amountComp());
+        assertEq(target, Constants.SABLIER, "target is not sablier");
+        assertEq(amount, proposal.amountComp(), "amount of COMP is wrong");
 
         // action 2
-        (target, amount) = abi.decode(calldatas[0], (address, uint256));
-        assertEq(target, Constants.SABLIER);
-        assertEq(amount, proposal.amountUsdc());
+        (target, amount) = abi.decode(calldatas[1], (address, uint256));
+        assertEq(target, Constants.SABLIER, "target is not sablier");
+        assertEq(amount, proposal.amountUsdc(), "amount of USDC is wrong");
 
-        // TODO add action 3 + 4
+        // action 3
 
+        address recipient;
+        address token;
+        uint256 startTime;
+        uint256 endTime;
+        (recipient, amount, token, startTime, endTime) = abi.decode(calldatas[2], 
+                                                        (address, uint256, address, uint256, uint256));
+
+        assertEq(recipient, Constants.CERTORA, "wrong recipient");
+        assertEq(amount, proposal.amountComp(), "wrong comp amount");
+        assertEq(token, Constants.COMP_TOKEN, "wrong comp token address");
+
+        assertEq(endTime - startTime, 60 * 60 * 24 * 365, "wrong comp stream duration");
+
+        // amount and duration must be divisible without remainder
+        assertEq(amount % (endTime - startTime), 0, "comp amount not divisible by duration");
+
+        // startTime must be after current time + 2 weeks
+        assertGt(startTime, block.timestamp +  Constants.MAX_VOTING_PERIOD * 15, "comp stream starts too soon");
+
+        // action 4
+        (recipient, amount, token, startTime, endTime) = abi.decode(calldatas[3], 
+                                                        (address, uint256, address, uint256, uint256));
+
+        assertEq(recipient, Constants.CERTORA, "wrong recipient");
+        assertEq(amount, proposal.amountUsdc(), "wrong usdc amount");
+        assertEq(token, Constants.USDC_TOKEN, "wrong usdc token address");
+
+        assertEq(endTime - startTime, 60 * 60 * 24 * 365, "wrong usdc stream duration");
+
+        // amount and duration must be divisible without remainder
+        assertEq(amount % (endTime - startTime), 0, "usdc amount not divisible by duration");
+
+        // startTime must be after current time + 2 weeks
+        assertGt(startTime, block.timestamp +  Constants.MAX_VOTING_PERIOD * 15, "usdc stream starts too soon");
     }
 
     function _testDescription() internal {
@@ -82,6 +113,7 @@ contract ContractTest is DSTest {
         _testTargets();
         _testValues();
         _testSignatures();
+        _testCalldatas();
         _testDescription();
     }
 
@@ -104,7 +136,27 @@ contract ContractTest is DSTest {
         assertLt(margin, ERROR_MARGIN);
     }
 
-    // TODO add the whole simulation and price calculation with chainlink oracle
+    function testUsdToUsdcConversion() public {
+        uint256 usdcAmount = proposal.convertUSDAmountToUSDC(Constants.USDC_VALUE);
+        console.log("usdc amount:", usdcAmount);
+
+        assertEq(usdcAmount, Constants.USDC_VALUE * 10 ** Constants.USDC_DECIMALS);
+    }
+
+    function testE2E() public {
+        // build proposal data
+        // deal quorum of tokens to msg.sender
+        // delegate to self
+        // run propose()
+        // vote for proposal
+        // warp forward
+        // queue
+        // warp forward
+        // execute
+
+        // check the stream using sablier.nextStreamId()
+
+
+    }
 
 }
-

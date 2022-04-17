@@ -21,4 +21,30 @@ library Constants {
 
     address internal constant COMP_USD_ORACLE = 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5;
 
+    uint256 public constant GRACE_PERIOD = 60 * 60 * 24; // 1 day additional grace period
+
+    // These constants are from Compound's GovernorBravoDelegate contract
+    // https://github.com/compound-finance/compound-protocol/blob/master/contracts/Governance/GovernorBravoDelegateG2.sol
+
+    /// @notice The minimum setable proposal threshold
+    uint public constant MIN_PROPOSAL_THRESHOLD = 50000e18; // 50,000 Comp
+
+    /// @notice The maximum setable proposal threshold
+    uint public constant MAX_PROPOSAL_THRESHOLD = 100000e18; //100,000 Comp
+
+    /// @notice The minimum setable voting period
+    uint public constant MIN_VOTING_PERIOD = 5760; // About 24 hours
+
+    /// @notice The max setable voting period
+    uint public constant MAX_VOTING_PERIOD = 80640; // About 2 weeks
+
+    /// @notice The min setable voting delay
+    uint public constant MIN_VOTING_DELAY = 1;
+
+    /// @notice The max setable voting delay
+    uint public constant MAX_VOTING_DELAY = 40320; // About 1 week
+
+    /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
+    uint public constant quorumVotes = 400000e18; // 400,000 = 4% of Comp
+
 }

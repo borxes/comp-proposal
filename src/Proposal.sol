@@ -29,6 +29,8 @@ contract Proposal {
     uint256 public amountUsdc;
     uint256 public startTime;
     uint256 public endTime;
+    uint256 public compEndTime;
+    uint256 public usdcEndTime;
     address public recipient;
 
     ProposalData internal data;
@@ -38,27 +40,24 @@ contract Proposal {
     IGovernorBravo public governor = IGovernorBravo(Constants.GOVERNOR_BRAVO);
     PriceOracle oracle = PriceOracle(Constants.COMP_USD_ORACLE);
 
-    string public constant description = "A proposal for significantly and continuously";
-    // "improving the security of the Compound platform and the dApps built on top of it, by offering" 
-    // "our formal verification and path coverage tooling service to the Compound Platform contributors" 
-    // "and the Compound Protocol dApp developers. This is a follow-up to our recent work on the Comet "
-    // "protocol with the Compound labs team. The idea is to provide access to the community and educate" 
-    // "the community, write formal specifications, and review code changes. This proposal is orthogonal "
-    // "to the Open Zeppelin proposal, which has already been suggested using the Certora prover. "
-    // "This proposal also suggests writing formal correctness rules for the Compound Protocol which"
-    // " will be reviewed by the community and OpenZeppelin. We have already written some formal "
-    // "requirements for Comet and prevented huge security breaches."
-    // "This is an update of an earlier unsubmitted proposal 2 discussed in November 2021.";
+    string public constant description = "A proposal for significantly and continuously"
+    "improving the security of the Compound platform and the dApps built on top of it, by offering" 
+    "our formal verification and path coverage tooling service to the Compound Platform contributors" 
+    "and the Compound Protocol dApp developers. This is a follow-up to our recent work on the Comet "
+    "protocol with the Compound labs team. The idea is to provide access to the community and educate" 
+    "the community, write formal specifications, and review code changes. This proposal is orthogonal "
+    "to the Open Zeppelin proposal, which has already been suggested using the Certora prover. "
+    "This proposal also suggests writing formal correctness rules for the Compound Protocol which"
+    " will be reviewed by the community and OpenZeppelin. We have already written some formal "
+    "requirements for Comet and prevented huge security breaches."
+    "This is an update of an earlier unsubmitted proposal 2 discussed in November 2021.";
 
-    constructor(uint256 _amountComp, uint256 _amountUsdc, uint256 _startTime, uint256 _endTime, 
-    address _recipient) {
-        require(_amountComp > 0 && _amountUsdc > 0);
-        require (_endTime > _startTime);
-        amountComp = _amountComp;
-        amountUsdc = _amountUsdc;
-        startTime = _startTime;
-        endTime = _endTime;
-        recipient = _recipient;
+    constructor() {
+        // MAX_VOTING_PERIOD is designated in blocks so we multiple by 15
+        startTime = block.timestamp + Constants.MAX_VOTING_PERIOD * 15 + Constants.GRACE_PERIOD;
+        // 1 year from startTime
+        endTime = startTime + 60 * 60 * 24 * 365;
+        recipient = Constants.CERTORA;
     }
 
 
@@ -90,6 +89,23 @@ contract Proposal {
         return compAmount;
     }
 
+    function convertUSDAmountToUSDC(uint256 usdAmount) public pure returns (uint256) {
+        return usdAmount * 10 ** Constants.USDC_DECIMALS;
+    }
+
+    function buildProposalData() public {
+        amountComp = convertUSDAmountToCOMP(Constants.COMP_VALUE);
+        amountComp -= amountComp % (endTime - startTime);
+        amountUsdc = convertUSDAmountToUSDC(Constants.USDC_VALUE);
+        amountUsdc -= amountUsdc % (endTime - startTime);
+
+        _addApproveCompAction();
+        _addApproveUsdcAction();
+        _addCreateCompStreamAction();
+        _addCreateUsdcStreamAction();
+        data.description = description;
+    }
+
 
     // Internal functions
 
@@ -117,16 +133,9 @@ contract Proposal {
     function _addCreateUsdcStreamAction() internal {
         data.targets.push(address(sablier));
         data.values.push(0);
-        data.signatures.push("createStream(address,uint256,address,uint256,uint256)");
-        data.calldatas.push(abi.encode(recipient, amountUsdc, Constants.COMP_TOKEN, startTime, endTime));
+        data.signatures.push("createStream(address,uint256,address,uint256,uint256)");       
+        data.calldatas.push(abi.encode(recipient, amountUsdc, Constants.USDC_TOKEN, startTime, endTime));
     }
 
-    function buildProposalData() public {
-        _addApproveCompAction();
-        _addApproveUsdcAction();
-        _addCreateCompStreamAction();
-        _addCreateUsdcStreamAction();
-        data.description = description;
-    }
 }
 

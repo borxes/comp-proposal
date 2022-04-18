@@ -84,4 +84,6 @@ interface IERC20 {
     external
     view
     returns (uint8);
+
+    function delegate(address delegatee) external;
 }

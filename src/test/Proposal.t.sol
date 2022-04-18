@@ -8,7 +8,10 @@ import "forge-std/console.sol";
 import "../Proposal.sol";
 import {Constants} from "../Constants.sol";
 import "../interfaces/Oracle.sol";
+import "../interfaces/IDelegatable.sol";
+import "../interfaces/GovernorBravo.sol";
 
+// for token amount calculations
 uint256 constant ERROR_MARGIN = 10 ** 12;
 
 contract ContractTest is Test {
@@ -79,7 +82,7 @@ contract ContractTest is Test {
         assertEq(amount % (endTime - startTime), 0, "comp amount not divisible by duration");
 
         // startTime must be after current time + 2 weeks
-        assertGt(startTime, block.timestamp +  Constants.MAX_VOTING_PERIOD * 15, "comp stream starts too soon");
+        assertGt(startTime, block.timestamp + Constants.MAX_VOTING_PERIOD * 15 - 1, "comp stream starts too soon");
 
         // action 4
         (recipient, amount, token, startTime, endTime) = abi.decode(calldatas[3], 
@@ -95,7 +98,7 @@ contract ContractTest is Test {
         assertEq(amount % (endTime - startTime), 0, "usdc amount not divisible by duration");
 
         // startTime must be after current time + 2 weeks
-        assertGt(startTime, block.timestamp +  Constants.MAX_VOTING_PERIOD * 15, "usdc stream starts too soon");
+        assertGt(startTime, block.timestamp +  Constants.MAX_VOTING_PERIOD * 15 - 1, "usdc stream starts too soon");
     }
 
     function _testDescription() internal {
@@ -116,16 +119,16 @@ contract ContractTest is Test {
         _testCalldatas();
         _testDescription();
     }
+    
 
-    function testCompToUsdcConversion() public {
+    function _testCompToUsdConversion(uint256 compAmount) internal {
         PriceOracle oracle = PriceOracle(Constants.COMP_USD_ORACLE);
-        uint256 compAmount = proposal.convertUSDAmountToCOMP(Constants.COMP_VALUE);
-        console.log("comp amount:", compAmount);
         (, int256 compPrice, , , ) = oracle.latestRoundData();
-        uint256 givenCompValue = compAmount * uint256(compPrice);
-        uint256 expectedUsdValue = Constants.COMP_VALUE * 10 ** (Constants.COMP_DECIMALS + oracle.decimals());
-        console.log("given comp value:", givenCompValue);
-        console.log("expected usd:", expectedUsdValue);
+        uint256 givenCompValue = compAmount * uint256(compPrice) / 10 ** oracle.decimals();
+        console.log("given Comp Value is:", givenCompValue);
+        uint256 expectedUsdValue = Constants.COMP_VALUE * 10 ** (Constants.COMP_DECIMALS);
+        console.log("expected Usd value is:", expectedUsdValue);
+        
         uint256 margin;
         if (expectedUsdValue > givenCompValue) {
             margin = expectedUsdValue - givenCompValue;
@@ -133,10 +136,11 @@ contract ContractTest is Test {
             margin = givenCompValue - expectedUsdValue;
         }
 
-        assertLt(margin, ERROR_MARGIN);
+        console.log("testing compAmount:", compAmount);
+        assertLt(margin, ERROR_MARGIN, "comp value is too far from expected");
     }
 
-    function testUsdToUsdcConversion() public {
+    function _testUsdcToUsdConversion() internal {
         uint256 usdcAmount = proposal.convertUSDAmountToUSDC(Constants.USDC_VALUE);
         console.log("usdc amount:", usdcAmount);
 
@@ -144,19 +148,122 @@ contract ContractTest is Test {
     }
 
     function testE2E() public {
-        // build proposal data
-        // deal quorum of tokens to msg.sender
-        // delegate to self
+
+        IDelegatable comp = IDelegatable(Constants.COMP_TOKEN);
+        IGovernorBravo governor = IGovernorBravo(Constants.GOVERNOR_BRAVO);
+        uint256 currentBlock = block.number;
+
+        deal(msg.sender, 1e18);
+
+        // give enough tokens for a quorum to msg.sender 
+        // deal(Constants.COMP_TOKEN, msg.sender, Constants.quorumVotes + 1 );
+        // deal doesn't work because it doesn't take into account delegates checkpoints
+        
+        // polychain - 306k votes
+        address whale1 = 0xea6C3Db2e7FCA00Ea9d7211a03e83f568Fc13BF7;
+        // a16z 256k votes
+        address whale2 = 0x9AA835Bc7b8cE13B9B0C9764A52FbF71AC62cCF1;
+        // team wallet with 364k tokens
+        address whale3 = 0x7587cAefc8096f5F40ACB83A09Df031a018C66ec;
+
+        vm.startPrank(whale3);
+        comp.delegate(address(proposal));
+        vm.stopPrank();
+
+        uint96 votes = comp.getCurrentVotes(address(proposal));
+        assertGt(votes, Constants.MIN_PROPOSAL_THRESHOLD);
+
+        console.log("current block: ", currentBlock, "votes: ", votes / 10e18);
+
+        vm.roll(currentBlock + 4 * 60 * 24 * 2);
+        vm.warp(block.timestamp + 2 days);
+        currentBlock = block.number;
+        console.log("current block: ", currentBlock);
+
         // run propose()
+        uint256 proposalId = proposal.run();
+
+        // proposal _review period is two days in the docs. But it only works with three days.
+        vm.roll(currentBlock + 4 * 60 * 24 * 3 + 1);
+        vm.warp(block.timestamp + 3 days);
+        currentBlock = block.number;
+
         // vote for proposal
-        // warp forward
+        vm.startPrank(whale1);
+        governor.castVote(proposalId, 1);
+        vm.stopPrank();
+
+        vm.startPrank(whale2);
+        governor.castVote(proposalId, 1);
+        vm.stopPrank();
+
+        // proposal voting period
+        vm.roll(currentBlock + 4 * 60 * 24 * 3);
+        vm.warp(block.timestamp + 3 days);
+        currentBlock = block.number;
+
         // queue
-        // warp forward
+        governor.queue(proposalId);
+
+        // proposal queue time
+        vm.roll(currentBlock + 4 * 60 * 24 * 2 + 1);
+        vm.warp(block.timestamp + 2 days);
+        currentBlock = block.number;
+
         // execute
+        governor.execute(proposalId);
 
         // check the stream using sablier.nextStreamId()
+        uint256 compStreamId = ISablier(Constants.SABLIER).nextStreamId() - 2;
+        uint256 usdcStreamId = ISablier(Constants.SABLIER).nextStreamId() - 1;
+
+        _testCompStream(compStreamId);
+        _testUsdcStream(usdcStreamId);
+    }
+
+    function _testCompStream(uint256 id) internal {
+        address sender;
+        address recipient;
+        uint256 deposit;
+        address token;
+        uint256 startTime;
+        uint256 stopTime;
+        uint256 remainingBalance;
+        uint256 ratePerSecond;
+
+        (sender, recipient, deposit, token, startTime, stopTime, remainingBalance, ratePerSecond) = 
+            ISablier(Constants.SABLIER).getStream(id);
+        
+        assertEq(recipient, Constants.CERTORA, "wrong comp stream recipient");
+        assertEq(token, Constants.COMP_TOKEN, "wrong comp stream token");
+        assertEq(stopTime - startTime, 365 * 24 * 60 * 60, "wrong comp stream duration");
+        // starts in the next 7 days
+        assertLt(startTime - block.timestamp, 60 * 60 * 24 * 7, "wrong comp stream start time");
+        _testCompToUsdConversion(remainingBalance);
+    }
 
 
+    function _testUsdcStream(uint256 id) internal {
+        address sender;
+        address recipient;
+        uint256 deposit;
+        address token;
+        uint256 startTime;
+        uint256 stopTime;
+        uint256 remainingBalance;
+        uint256 ratePerSecond;
+
+        (sender, recipient, deposit, token, startTime, stopTime, remainingBalance, ratePerSecond) = 
+            ISablier(Constants.SABLIER).getStream(id);
+        
+        assertEq(recipient, Constants.CERTORA, "wrong usdc stream recipient");
+        assertEq(token, Constants.USDC_TOKEN, "wrong  usdc  stream token");
+        assertEq(stopTime - startTime, 365 * 24 * 60 * 60, "wrong usdc stream duration");
+
+        uint256 expectedUsdc = Constants.USDC_VALUE * 10 ** Constants.USDC_DECIMALS;
+        assertLt(expectedUsdc - remainingBalance, ERROR_MARGIN, "wrong usdc stream balance");
+        // starts in the next 7 days
+        assertLt(startTime - block.timestamp, 60 * 60 * 24 * 7, "wrong usdc stream start time");
     }
 
 }

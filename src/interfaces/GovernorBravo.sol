@@ -31,6 +31,13 @@ interface IGovernorBravo {
      */
     function cancel(uint256 proposalId) external;
 
+      /**
+      * @notice Cast a vote for a proposal
+      * @param proposalId The id of the proposal to vote on
+      * @param support The support value for the vote. 0=against, 1=for, 2=abstain
+      */
+    function castVote(uint proposalId, uint8 support) external;
+
     /**
      * @dev Part of the Governor Bravo's interface: _"Gets actions of a proposal"_.
      */
@@ -43,4 +50,6 @@ interface IGovernorBravo {
             string[] memory signatures,
             bytes[] memory calldatas
         );
+    
+    function proposalThreshold() external view returns (uint256);
 }

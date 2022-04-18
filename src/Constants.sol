@@ -47,4 +47,6 @@ library Constants {
     /// @notice The number of votes in support of a proposal required in order for a quorum to be reached and for a vote to succeed
     uint public constant quorumVotes = 400000e18; // 400,000 = 4% of Comp
 
+    uint public constant  TIMELOCK_DELAY = 172800; // seconds
+
 }

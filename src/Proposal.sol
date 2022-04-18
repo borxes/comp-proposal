@@ -53,8 +53,10 @@ contract Proposal {
     "This is an update of an earlier unsubmitted proposal 2 discussed in November 2021.";
 
     constructor() {
+        // TODO these vars should be initialized when running propose, not in constructor
+
         // MAX_VOTING_PERIOD is designated in blocks so we multiple by 15
-        startTime = block.timestamp + Constants.MAX_VOTING_PERIOD * 15 + Constants.GRACE_PERIOD;
+        startTime = block.timestamp + Constants.MAX_VOTING_PERIOD * 15;
         // 1 year from startTime
         endTime = startTime + 60 * 60 * 24 * 365;
         recipient = Constants.CERTORA;
@@ -65,10 +67,10 @@ contract Proposal {
         return abi.encode(data.targets, data.values, data.signatures, data.calldatas, data.description);
     }
 
-
-    function run() public {
+    // returns the proposal id
+    function run() public returns(uint256) {
         buildProposalData();
-        governor.propose(data.targets, data.values, data.signatures, data.calldatas, description);       
+        return governor.propose(data.targets, data.values, data.signatures, data.calldatas, description);       
     }
 
     function getPriceOfCOMPinUSD() public view returns (uint256, uint8) {
@@ -80,7 +82,6 @@ contract Proposal {
         return (uint256(compPrice), oracle.decimals());
     }
 
-    // formally verify me please :-)
     function convertUSDAmountToCOMP(uint256 usdAmount) public view returns (uint256) {
         uint8 compDecimals = IERC20(Constants.COMP_TOKEN).decimals();
         (uint compPrice, uint8 priceDecimals) = getPriceOfCOMPinUSD();
@@ -95,6 +96,7 @@ contract Proposal {
 
     function buildProposalData() public {
         amountComp = convertUSDAmountToCOMP(Constants.COMP_VALUE);
+        // make the amount divisible by duration
         amountComp -= amountComp % (endTime - startTime);
         amountUsdc = convertUSDAmountToUSDC(Constants.USDC_VALUE);
         amountUsdc -= amountUsdc % (endTime - startTime);
